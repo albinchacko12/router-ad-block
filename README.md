@@ -14,7 +14,7 @@ software installed on the device.
 
 1. Your router's DHCP tells every device to use this machine as its DNS server.
 2. For each lookup, the blocker checks the name (and its parent domains) against
-   downloaded blocklists plus your own rules.
+   uBlock Origin's filter lists plus your own rules.
 3. Blocked names get `0.0.0.0` / `::`; everything else is forwarded upstream.
 
 Decision order for each query:
@@ -22,7 +22,42 @@ Decision order for each query:
 1. Blocking turned off or paused → allow
 2. Device is on the bypass list → allow
 3. Domain (or a parent) is in **Allowed exceptions** → allow
-4. Domain (or a parent) is in **Custom blocks** or a blocklist → block
+4. Domain (or a parent) is in **Custom blocks** → block
+5. A list blocks it with `$important` → block
+6. A list has an `@@||domain^` exception for it → allow
+7. A list blocks it → block
+
+## Blocklists: uBlock Origin's defaults
+
+Out of the box it uses the same lists uBlock Origin enables by default, fetched
+from uBO's own CDN:
+
+| List | Source |
+| --- | --- |
+| uBlock filters – Ads, Badware risks, Privacy, Unbreak, Quick fixes | `ublockorigin.github.io/uAssetsCDN/filters/*.min.txt` |
+| EasyList, EasyPrivacy | `ublockorigin.github.io/uAssetsCDN/thirdparties/` |
+| Online Malicious URL Blocklist | `malware-filter.gitlab.io` (DNS-format build) |
+| Peter Lowe's Ad and tracking server list | `pgl.yoyo.org` |
+
+That comes to roughly 97,000 blocked hostnames. You can add other uBO lists
+(regional lists, AdGuard lists, etc.) in the web UI; hosts files and plain
+domain lists work too.
+
+**What carries over from a browser filter list.** A DNS server only sees
+hostnames, not URLs, page content or request types, so only rules that block an
+entire host are used:
+
+- used: `||host^`, `||host^$third-party`/`$3p`, `$doc`, `$all`, `$important`,
+  `@@||host^` exceptions, `$badfilter` (across lists, as uBO does; the Unbreak
+  list relies on it), `!#if` blocks and `!#include` sub-lists
+- skipped: cosmetic filters (`##`), scriptlets (`+js`), rules with a path, and
+  rules limited by type or site (`$script`, `$image`, `$popup`, `$domain=`, …).
+  Blocking a whole host for those would break sites.
+
+`$third-party` rules are applied to every request, since DNS can't tell first-
+from third-party. That rarely matters for ad and tracker hosts, but a few
+dashboards (for example `analytics.google.com`) get blocked when you visit them
+directly. Add those to **Allowed exceptions**.
 
 ## Web interface
 
@@ -33,7 +68,7 @@ Open `http://<server-ip>:8080`. From there you can:
 - let specific **devices bypass** blocking entirely, by IP
 - add **custom blocks**
 - watch **recent queries** and click *Allow* / *Block* on any of them
-- add, disable, remove and refresh **blocklists** (hosts-file or `||domain^` format)
+- add, disable, remove and refresh **blocklists**
 - **check** whether a domain would be blocked and why
 
 Settings are saved to `data/state.json` and survive restarts.
@@ -127,7 +162,11 @@ DNS blocking stops ads served from separate ad domains. It cannot block:
 - devices or browsers using **DNS-over-HTTPS** (Firefox and Chrome may enable it;
   turn it off in the browser, or block known DoH endpoints with a custom block)
 
-For those, pair this with a browser extension such as uBlock Origin.
+- page elements and scripts on sites you do visit (cosmetic and scriptlet filters)
+
+For those, also run the uBlock Origin extension in your browser. The two work
+well together: this covers every device on the network, including TVs and phone
+apps, and uBO handles what only a browser can.
 
 ## Development
 

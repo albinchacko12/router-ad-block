@@ -1,8 +1,26 @@
 import os
 from dataclasses import dataclass, field
 
+# The lists uBlock Origin enables out of the box (see uBlock's assets/assets.json),
+# using the pre-assembled CDN builds where uBO publishes them.
+UBO_CDN = "https://ublockorigin.github.io/uAssetsCDN"
 DEFAULT_LISTS = [
-    "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+    {"name": "uBlock filters – Ads", "url": f"{UBO_CDN}/filters/filters.min.txt"},
+    {"name": "uBlock filters – Badware risks", "url": f"{UBO_CDN}/filters/badware.min.txt"},
+    {"name": "uBlock filters – Privacy", "url": f"{UBO_CDN}/filters/privacy.min.txt"},
+    {"name": "uBlock filters – Unbreak", "url": f"{UBO_CDN}/filters/unbreak.min.txt"},
+    {"name": "uBlock filters – Quick fixes", "url": f"{UBO_CDN}/filters/quick-fixes.min.txt"},
+    {"name": "EasyList", "url": f"{UBO_CDN}/thirdparties/easylist.txt"},
+    {"name": "EasyPrivacy", "url": f"{UBO_CDN}/thirdparties/easyprivacy.txt"},
+    {"name": "Online Malicious URL Blocklist",
+     "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh-online.txt"},
+    {"name": "Peter Lowe’s Ad and tracking server list",
+     "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext"},
+]
+
+# Defaults shipped by earlier versions; saved settings that still match are upgraded.
+LEGACY_DEFAULT_LISTS = [
+    ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"],
 ]
 
 

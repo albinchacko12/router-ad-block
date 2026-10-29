@@ -132,7 +132,7 @@ def make_handler(filter_, admin_password):
                     if "enabled" in body:
                         f.set_list_enabled(url, body["enabled"])
                     else:
-                        f.add_list(url)
+                        f.add_list(url, body.get("name", ""))
                     threading.Thread(target=f.refresh_lists, daemon=True).start()
                 else:
                     f.remove_list(url)

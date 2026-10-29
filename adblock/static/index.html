@@ -25,7 +25,7 @@
   .stats { display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; color:var(--muted); }
   .stats b { display:block; color:var(--text); font-size:20px; }
   button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text);
-           border-radius:7px; padding:6px 12px; cursor:pointer; }
+           border-radius:7px; padding:6px 12px; cursor:pointer; white-space:nowrap; }
   button:hover { border-color:var(--accent); }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.danger { color:var(--bad); }
@@ -34,6 +34,8 @@
   input[type=text] { font:inherit; flex:1; min-width:0; padding:6px 10px; border:1px solid var(--line);
                      border-radius:7px; background:var(--bg); color:var(--text); }
   ul.entries { list-style:none; padding:0; margin:12px 0 0; max-height:240px; overflow:auto; }
+  ul#lists { max-height:none; }
+  ul.entries li > span:last-child { flex:none; }
   ul.entries li { display:flex; justify-content:space-between; align-items:center; gap:8px;
                   padding:5px 0; border-bottom:1px solid var(--line); word-break:break-all; }
   .empty { color:var(--muted); font-size:13px; }
@@ -72,7 +74,7 @@
       <div><b id="s-total">0</b>queries</div>
       <div><b id="s-blocked">0</b>blocked</div>
       <div><b id="s-pct">0%</b>blocked rate</div>
-      <div><b id="s-domains">0</b>domains on blocklists</div>
+      <div><b id="s-domains">0</b>hosts on blocklists</div>
     </div>
   </section>
 
@@ -118,8 +120,8 @@
 
   <section class="card">
     <h2>Blocklists</h2>
-    <p class="hint">Hosts-file or adblock-style (||domain^) lists. Refreshed automatically.</p>
-    <form class="row" id="list-form"><input type="text" placeholder="https://…/hosts.txt" required><button class="primary">Add list</button><button type="button" id="refresh">Refresh all</button></form>
+    <p class="hint">uBlock Origin / Adblock Plus filter lists, hosts files or plain domain lists. Only rules that block a whole domain apply at the DNS level. Refreshed automatically.</p>
+    <form class="row" id="list-form"><input type="text" name="name" placeholder="Name (optional)" style="flex:0 1 200px"><input type="text" name="url" placeholder="https://…/filters.txt" required><button class="primary">Add list</button><button type="button" id="refresh">Refresh all</button></form>
     <ul class="entries" id="lists"></ul>
   </section>
 </main>
@@ -182,9 +184,10 @@ function renderEntries(settings) {
   const lists = $("#lists"); lists.replaceChildren();
   for (const l of settings.lists) {
     const info = l.error ? `error: ${l.error}` :
-      `${(l.domains || 0).toLocaleString()} domains` + (l.updated ? ` · updated ${new Date(l.updated * 1000).toLocaleString()}` : " · downloading…");
+      `${(l.domains || 0).toLocaleString()} blocked hosts` + (l.updated ? ` · updated ${new Date(l.updated * 1000).toLocaleString()}` : " · downloading…");
     lists.append(el("li", {},
-      el("span", {}, el("span", { textContent: l.url }), el("br"), el("span", { className: "empty", textContent: l.enabled ? info : "disabled" })),
+      el("span", {}, el("span", { textContent: l.name || l.url }), el("br"),
+        el("span", { className: "empty", textContent: (l.enabled ? info : "disabled") + (l.name && l.name !== l.url ? ` · ${l.url}` : "") })),
       el("span", { className: "row", style: "flex-wrap:nowrap" },
         el("button", { className: "small", textContent: l.enabled ? "Disable" : "Enable",
           onclick: () => act(() => api("/api/lists", "POST", { url: l.url, enabled: !l.enabled })) }),
@@ -235,8 +238,11 @@ $("#check-form").addEventListener("submit", async (ev) => {
 });
 $("#list-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
-  const input = ev.target.querySelector("input");
-  act(async () => { await api("/api/lists", "POST", { url: input.value.trim() }); input.value = ""; }, "List added, downloading…");
+  const form = ev.target;
+  act(async () => {
+    await api("/api/lists", "POST", { name: form.elements.name.value.trim(), url: form.elements.url.value.trim() });
+    form.reset();
+  }, "List added, downloading…");
 });
 $("#refresh").addEventListener("click", () => act(() => api("/api/lists/refresh", "POST", {}), "Refreshing lists…"));
 $("#blocked-only").addEventListener("change", refresh);
