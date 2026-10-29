@@ -1,0 +1,14 @@
+services:
+  adblock:
+    build: .
+    container_name: router-ad-block
+    # Host networking so port 53 is reachable on the LAN and the query log
+    # shows each device's real IP (needed for per-device bypass).
+    network_mode: host
+    environment:
+      ADMIN_PASSWORD: change-me
+      UPSTREAM_DNS: 1.1.1.1,9.9.9.9
+      WEB_PORT: "8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

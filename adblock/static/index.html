@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Router Ad Block</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1c1f24; --muted:#6b7280; --line:#e3e6ea;
+          --accent:#2563eb; --ok:#16a34a; --bad:#dc2626; --warn:#d97706; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111318; --card:#1b1e24; --text:#e8eaed; --muted:#9aa0a6; --line:#2c3038;
+            --accent:#5b8def; --ok:#22c55e; --bad:#f05252; --warn:#f59e0b; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:22px; margin:0 0 16px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .status { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .dot { width:14px; height:14px; border-radius:50%; background:var(--ok); flex:none; }
+  .dot.off { background:var(--bad); } .dot.paused { background:var(--warn); }
+  .status-text { font-size:18px; font-weight:600; flex:1; min-width:160px; }
+  .stats { display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; color:var(--muted); }
+  .stats b { display:block; color:var(--text); font-size:20px; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text);
+           border-radius:7px; padding:6px 12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:var(--bad); }
+  button.small { padding:2px 8px; font-size:13px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  input[type=text] { font:inherit; flex:1; min-width:0; padding:6px 10px; border:1px solid var(--line);
+                     border-radius:7px; background:var(--bg); color:var(--text); }
+  ul.entries { list-style:none; padding:0; margin:12px 0 0; max-height:240px; overflow:auto; }
+  ul.entries li { display:flex; justify-content:space-between; align-items:center; gap:8px;
+                  padding:5px 0; border-bottom:1px solid var(--line); word-break:break-all; }
+  .empty { color:var(--muted); font-size:13px; }
+  .hint { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.domain { word-break:break-all; }
+  .tag { font-size:12px; padding:1px 6px; border-radius:4px; white-space:nowrap; }
+  .tag.b { background:color-mix(in srgb, var(--bad) 15%, transparent); color:var(--bad); }
+  .tag.a { background:color-mix(in srgb, var(--ok) 15%, transparent); color:var(--ok); }
+  .table-wrap { overflow-x:auto; max-height:480px; overflow-y:auto; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg);
+           padding:8px 14px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  .hide-sm { } @media (max-width:600px) { .hide-sm { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Router Ad Block</h1>
+
+  <section class="card">
+    <div class="status">
+      <span id="dot" class="dot"></span>
+      <span id="status-text" class="status-text">Loading…</span>
+      <button id="toggle" class="primary">…</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <span class="hint" style="margin:6px 0">Pause for:</span>
+      <button data-pause="5">5 min</button>
+      <button data-pause="30">30 min</button>
+      <button data-pause="60">1 hour</button>
+      <button data-pause="0" id="resume" hidden>Resume now</button>
+    </div>
+    <div class="stats">
+      <div><b id="s-total">0</b>queries</div>
+      <div><b id="s-blocked">0</b>blocked</div>
+      <div><b id="s-pct">0%</b>blocked rate</div>
+      <div><b id="s-domains">0</b>domains on blocklists</div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Allowed exceptions</h2>
+      <p class="hint">Never blocked. Covers subdomains too (example.com allows ads.example.com).</p>
+      <form class="row" data-kind="allowlist"><input type="text" placeholder="example.com" required><button class="primary">Allow</button></form>
+      <ul class="entries" id="list-allowlist"></ul>
+    </section>
+    <section class="card">
+      <h2>Devices that bypass blocking</h2>
+      <p class="hint">Devices with these IP addresses are never filtered. Give them a fixed IP in your router.</p>
+      <form class="row" data-kind="bypass"><input type="text" placeholder="192.168.1.50" required><button class="primary">Add</button></form>
+      <ul class="entries" id="list-bypass_clients"></ul>
+    </section>
+    <section class="card">
+      <h2>Custom blocks</h2>
+      <p class="hint">Extra domains to block on top of the blocklists.</p>
+      <form class="row" data-kind="blocklist"><input type="text" placeholder="tracker.example" required><button class="primary">Block</button></form>
+      <ul class="entries" id="list-blocklist"></ul>
+    </section>
+    <section class="card">
+      <h2>Check a domain</h2>
+      <p class="hint">See whether a domain would be blocked and why.</p>
+      <form class="row" id="check-form"><input type="text" placeholder="doubleclick.net" required><button>Check</button></form>
+      <p id="check-result" class="hint" style="margin-top:10px"></p>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin:0">Recent queries</h2>
+      <label class="hint" style="margin:0"><input type="checkbox" id="blocked-only"> Blocked only</label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="hide-sm">Time</th><th>Domain</th><th class="hide-sm">Device</th><th>Result</th><th></th></tr></thead>
+        <tbody id="queries"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Blocklists</h2>
+    <p class="hint">Hosts-file or adblock-style (||domain^) lists. Refreshed automatically.</p>
+    <form class="row" id="list-form"><input type="text" placeholder="https://…/hosts.txt" required><button class="primary">Add list</button><button type="button" id="refresh">Refresh all</button></form>
+    <ul class="entries" id="lists"></ul>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+
+async function api(path, method = "GET", body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) node.append(c);
+  return node;
+}
+
+async function act(fn, msg) {
+  try { await fn(); if (msg) toast(msg); await refresh(); } catch (e) { toast(e.message); }
+}
+
+function renderStatus(s) {
+  const paused = s.enabled && s.paused_until > 0;
+  $("#dot").className = "dot" + (!s.enabled ? " off" : paused ? " paused" : "");
+  $("#status-text").textContent = !s.enabled ? "Blocking is OFF"
+    : paused ? `Paused until ${new Date(s.paused_until * 1000).toLocaleTimeString()}` : "Blocking is ON";
+  $("#toggle").textContent = s.enabled ? "Turn off" : "Turn on";
+  $("#toggle").className = s.enabled ? "danger" : "primary";
+  $("#toggle").onclick = () => act(() => api("/api/enabled", "POST", { enabled: !s.enabled }));
+  $("#resume").hidden = !paused;
+  $("#s-total").textContent = s.total_queries.toLocaleString();
+  $("#s-blocked").textContent = s.blocked_queries.toLocaleString();
+  $("#s-pct").textContent = s.total_queries ? (100 * s.blocked_queries / s.total_queries).toFixed(1) + "%" : "0%";
+  $("#s-domains").textContent = s.blocklist_domains.toLocaleString();
+}
+
+const KIND_PATH = { allowlist: "/api/allowlist", blocklist: "/api/blocklist", bypass_clients: "/api/bypass" };
+
+function renderEntries(settings) {
+  for (const kind of Object.keys(KIND_PATH)) {
+    const ul = $("#list-" + kind); ul.replaceChildren();
+    if (!settings[kind].length) ul.append(el("li", { className: "empty", textContent: "None yet" }));
+    for (const value of settings[kind]) {
+      ul.append(el("li", {}, el("span", { textContent: value }),
+        el("button", { className: "small danger", textContent: "Remove",
+          onclick: () => act(() => api(KIND_PATH[kind], "DELETE", { value }), "Removed") })));
+    }
+  }
+  const lists = $("#lists"); lists.replaceChildren();
+  for (const l of settings.lists) {
+    const info = l.error ? `error: ${l.error}` :
+      `${(l.domains || 0).toLocaleString()} domains` + (l.updated ? ` · updated ${new Date(l.updated * 1000).toLocaleString()}` : " · downloading…");
+    lists.append(el("li", {},
+      el("span", {}, el("span", { textContent: l.url }), el("br"), el("span", { className: "empty", textContent: l.enabled ? info : "disabled" })),
+      el("span", { className: "row", style: "flex-wrap:nowrap" },
+        el("button", { className: "small", textContent: l.enabled ? "Disable" : "Enable",
+          onclick: () => act(() => api("/api/lists", "POST", { url: l.url, enabled: !l.enabled })) }),
+        el("button", { className: "small danger", textContent: "Remove",
+          onclick: () => act(() => api("/api/lists", "DELETE", { url: l.url }), "List removed") }))));
+  }
+}
+
+function renderQueries(rows) {
+  const tbody = $("#queries"); tbody.replaceChildren();
+  if (!rows.length) tbody.append(el("tr", {}, el("td", { colSpan: 5, className: "empty", textContent: "No queries yet. Point a device's DNS at this server." })));
+  for (const q of rows) {
+    const button = q.blocked
+      ? el("button", { className: "small", textContent: "Allow", onclick: () => act(() => api("/api/allowlist", "POST", { value: q.domain }), `Allowed ${q.domain}`) })
+      : el("button", { className: "small danger", textContent: "Block", onclick: () => act(() => api("/api/blocklist", "POST", { value: q.domain }), `Blocked ${q.domain}`) });
+    tbody.append(el("tr", { title: q.reason || "" },
+      el("td", { className: "hide-sm", textContent: new Date(q.time * 1000).toLocaleTimeString() }),
+      el("td", { className: "domain", textContent: q.domain }),
+      el("td", { className: "hide-sm", textContent: q.client }),
+      el("td", {}, el("span", { className: "tag " + (q.blocked ? "b" : "a"), textContent: q.blocked ? "blocked" : "allowed" })),
+      el("td", {}, button)));
+  }
+}
+
+async function refresh() {
+  try {
+    const blocked = $("#blocked-only").checked ? 1 : 0;
+    const [status, settings, queries] = await Promise.all([
+      api("/api/status"), api("/api/settings"), api(`/api/queries?limit=200&blocked=${blocked}`)]);
+    renderStatus(status); renderEntries(settings); renderQueries(queries);
+  } catch (e) { toast("Could not reach server: " + e.message); }
+}
+
+document.querySelectorAll("form[data-kind]").forEach((form) => form.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const input = form.querySelector("input");
+  const path = "/api/" + form.dataset.kind;
+  act(async () => { await api(path, "POST", { value: input.value }); input.value = ""; }, "Saved");
+}));
+document.querySelectorAll("[data-pause]").forEach((b) =>
+  b.addEventListener("click", () => act(() => api("/api/pause", "POST", { minutes: +b.dataset.pause }))));
+$("#check-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const r = await api("/api/check?domain=" + encodeURIComponent(ev.target.querySelector("input").value.trim()));
+    $("#check-result").textContent = r.blocked ? `Blocked: ${r.reason}` : `Allowed${r.reason ? ": " + r.reason : ""}`;
+  } catch (e) { toast(e.message); }
+});
+$("#list-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const input = ev.target.querySelector("input");
+  act(async () => { await api("/api/lists", "POST", { url: input.value.trim() }); input.value = ""; }, "List added, downloading…");
+});
+$("#refresh").addEventListener("click", () => act(() => api("/api/lists/refresh", "POST", {}), "Refreshing lists…"));
+$("#blocked-only").addEventListener("change", refresh);
+
+refresh();
+setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+</script>
+</body>
+</html>
